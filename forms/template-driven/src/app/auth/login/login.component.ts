@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { afterNextRender, Component, DestroyRef, inject, viewChild } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
+import { debounceTime, Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-login',
@@ -9,6 +10,20 @@ import { FormsModule, NgForm } from '@angular/forms';
   imports : [FormsModule]
 })
 export class LoginComponent {
+
+  readonly savedLoginFormLocalStorage = 'saved-login-form';
+
+  private form = viewChild.required<NgForm>('form');
+  private destroyRef = inject(DestroyRef);
+
+  constructor() {
+    afterNextRender(() => {
+      this.getSavedEmailFromLocalStorageAndFillTheForm();
+      const formValueChangesSubscription = this.saveEmailInLocalStorageWhenItChanges();
+      this.destroyRef.onDestroy(() => formValueChangesSubscription?.unsubscribe());
+    });
+
+  }
 
 
   onSubmit(formData: NgForm) {
@@ -31,6 +46,36 @@ export class LoginComponent {
     if (formData.form.valid) {
       console.log('The form is valid');
     }
+
+    formData.form.reset();
+  }
+
+  private getSavedEmailFromLocalStorageAndFillTheForm() {
+      const savedEmailFromLocalStorage = window.localStorage.getItem(this.savedLoginFormLocalStorage);
+
+      if (savedEmailFromLocalStorage) {
+        // this.form().setValue({
+        //   email: JSON.parse(savedEmailFromLocalStorage).email,
+        //   password: ''
+        // });
+
+        // The "setTimeout" is important because when the page is loaded the form is not completed rendered.
+        setTimeout(() => {
+          this.form().controls['email'].setValue(JSON.parse(savedEmailFromLocalStorage).email);
+        }, 1);
+      }
+  }
+
+  private saveEmailInLocalStorageWhenItChanges() : Subscription | undefined {
+    return this.form().valueChanges?.pipe(debounceTime(500)
+      ).subscribe({
+        next: (value) => {
+          window.localStorage.setItem(
+            this.savedLoginFormLocalStorage,
+            JSON.stringify({email : value.email})
+          );
+        }
+      });
   }
   
 }
